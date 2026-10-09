@@ -133,3 +133,21 @@ export const shortKey = (k: PublicKey | string) => {
 /** Stable unique key for a flick, used to trigger animations exactly once. */
 export const flickKey = (g: GameState) =>
   g.flickCount > 0 ? `${g.gameId}:${g.round}:${g.flickCount}` : null;
+
+/**
+ * Flicks each seat still has this round, predicted from the round cap and the turn order
+ * (the program only stores the round total). Eliminated pens have none.
+ */
+export function flicksLeft(g: GameState): number[] {
+  const n = g.maxPlayers;
+  const total = Math.max(0, maxFlicks(n) - g.flickCount);
+  const left: number[] = Array.from({ length: n }, () => 0);
+  const alive = g.pens.map((p, i) => (p.out ? -1 : i)).filter((i) => i >= 0);
+  if (alive.length === 0) return left;
+  const start = Math.max(0, alive.indexOf(g.turn));
+  const order = alive.slice(start).concat(alive.slice(0, start));
+  order.forEach((seat, j) => {
+    left[seat] = total > j ? Math.floor((total - j - 1) / alive.length) + 1 : 0;
+  });
+  return left;
+}
