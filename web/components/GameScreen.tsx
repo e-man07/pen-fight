@@ -28,13 +28,23 @@ const fmtSol = (l: bigint) => {
   return v === 0 ? "0" : v < 0.01 ? v.toFixed(4) : v.toFixed(v < 1 ? 3 : 2).replace(/\.?0+$/, "");
 };
 
-function Pips({ wins, target, color }: { wins: number; target: number; color: string }) {
+function Pips({
+  wins,
+  target,
+  color,
+  small = false,
+}: {
+  wins: number;
+  target: number;
+  color: string;
+  small?: boolean;
+}) {
   return (
     <div className="flex gap-1">
       {Array.from({ length: target }, (_, i) => (
         <span
           key={i}
-          className="h-3.5 w-3.5 rounded-full border-2 border-black/50"
+          className={`${small ? "h-2.5 w-2.5" : "h-3.5 w-3.5"} rounded-full border-2 border-black/50`}
           style={{ background: i < wins ? color : "transparent" }}
         />
       ))}
@@ -132,6 +142,85 @@ function PlayerCard({
               />
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Phone-sized scoreboard card: everything on two tight lines. */
+function CompactCard({
+  g,
+  idx,
+  name,
+  me,
+  active,
+  left,
+  secondsLeft,
+}: {
+  g: GameState;
+  idx: number;
+  name: string;
+  me: boolean;
+  active: boolean;
+  left: number;
+  secondsLeft: number | null;
+}) {
+  const color = seatColor(idx);
+  const playing = g.phase === PHASE.PLAYING;
+  const out = playing && !!g.pens[idx]?.out;
+  const urgent = secondsLeft !== null && secondsLeft <= 10;
+  const accent = urgent ? "#ff5a4d" : color;
+  const frac = secondsLeft === null ? 1 : Math.max(0, Math.min(1, secondsLeft / TURN_TIMEOUT));
+  return (
+    <div
+      className={`panel relative min-w-0 overflow-hidden px-2.5 pb-2 pt-1.5 ${
+        active ? "pulse-ring" : ""
+      } ${out ? "opacity-55" : ""}`}
+      style={{ borderColor: active ? accent : undefined, borderWidth: active ? 2 : undefined }}
+    >
+      <div className="flex items-center gap-1.5">
+        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} />
+        <span className="font-hand min-w-0 truncate text-[1.05rem] leading-none">{name}</span>
+        {me && <span className="text-[0.6rem] uppercase tracking-wide text-chalk/55">you</span>}
+        <span className="ml-auto">
+          <Pips small wins={g.wins[idx] ?? 0} target={g.targetWins} color={color} />
+        </span>
+      </div>
+      <div className="mt-1.5 flex h-5 items-center gap-1.5">
+        {out ? (
+          <span className="text-xs text-chalk/60">out this round</span>
+        ) : playing ? (
+          <>
+            <div className="flex gap-[2px]">
+              {Array.from({ length: FLICKS_PER_PLAYER }, (_, i) => (
+                <span
+                  key={i}
+                  className="h-1.5 w-2 rounded-full"
+                  style={{ background: i < left ? color : "rgba(255,255,255,0.16)" }}
+                />
+              ))}
+            </div>
+            <span className="font-hand text-sm leading-none text-chalk/80">{left}</span>
+            {active && secondsLeft !== null && (
+              <span
+                className="font-hand ml-auto text-xl leading-none tabular-nums"
+                style={{ color: urgent ? "#ff9a90" : "#f6f3e8" }}
+              >
+                {Math.ceil(secondsLeft)}s
+              </span>
+            )}
+            {active && secondsLeft === null && (
+              <span className="font-hand ml-auto text-sm leading-none" style={{ color: accent }}>
+                {me ? "your turn" : "thinking…"}
+              </span>
+            )}
+          </>
+        ) : null}
+      </div>
+      {active && secondsLeft !== null && !out && (
+        <div className="absolute inset-x-0 bottom-0 h-1 bg-white/10">
+          <div className="h-full" style={{ width: `${frac * 100}%`, background: accent }} />
         </div>
       )}
     </div>
@@ -370,8 +459,52 @@ export function GameScreen({
 
       {/* ----------------------------------------------------------------- HUD */}
       <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-3 sm:p-4">
-        {/* top bar */}
-        <div className="flex flex-wrap items-start justify-between gap-2">
+        {/* top bar: phones get a compact two-row HUD, larger screens the full one */}
+        <div className="pointer-events-none flex flex-col gap-2 sm:hidden">
+          {g && (
+            <>
+              <div className="pointer-events-auto flex items-center gap-2">
+                <button
+                  className="glass grid h-9 w-9 shrink-0 place-items-center !rounded-full text-lg"
+                  onClick={onExit}
+                  aria-label={isLocal ? "Back to menu" : "Back to lobby"}
+                >
+                  ←
+                </button>
+                <div className="panel flex min-w-0 flex-1 items-center justify-center gap-1.5 px-3 py-1.5 font-hand text-base leading-none">
+                  <span>Round {g.round}</span>
+                  <span className="text-chalk/50">· first to {g.targetWins}</span>
+                  <span className="text-chalk/50">·</span>
+                  <span className="text-marker">
+                    {isLocal ? "Practice" : g.stake === 0n ? "Free" : `${fmtSol(pot)} SOL pot`}
+                  </span>
+                </div>
+                <button
+                  className="glass grid h-9 w-9 shrink-0 place-items-center !rounded-full text-base"
+                  onClick={() => setRulesOpen(true)}
+                  aria-label="How to play"
+                >
+                  ❓
+                </button>
+              </div>
+              <div className="pointer-events-auto grid grid-cols-2 gap-2">
+                {[seat, ...others].map((i) => (
+                  <CompactCard
+                    key={i}
+                    g={g}
+                    idx={i}
+                    name={nameOf(i)}
+                    me={i === seat && m.seat !== null}
+                    active={g.phase === PHASE.PLAYING && g.turn === i}
+                    left={left[i] ?? 0}
+                    secondsLeft={isLocal ? null : m.turnSecondsLeft}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+        <div className="hidden flex-wrap items-start justify-between gap-2 sm:flex">
           <div className="pointer-events-auto flex flex-col gap-2">
             <button className="btn btn-ghost !bg-black/30 !px-3 !py-2 !text-base" onClick={onExit}>
               ← {isLocal ? "Menu" : "Lobby"}
