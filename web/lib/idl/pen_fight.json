@@ -1,0 +1,1310 @@
+{
+  "address": "FYd5yQ5ntHDUsmjrSbkm3EaxnzNpadtfjYHTQSnaNPM",
+  "metadata": {
+    "name": "pen_fight",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Pen Fight: a 1v1 desk-flick game on MagicBlock Ephemeral Rollups with a SOL pot"
+  },
+  "instructions": [
+    {
+      "name": "callback_seed",
+      "docs": [
+        "ER. VRF oracle callback: set the seed, spawn the pens, pick who starts."
+      ],
+      "discriminator": [
+        179,
+        172,
+        236,
+        94,
+        46,
+        130,
+        64,
+        92
+      ],
+      "accounts": [
+        {
+          "name": "vrf_program_identity",
+          "docs": [
+            "Scoped VRF identity PDA, bound to this program. Its presence as a signer proves",
+            "the callback was issued by the VRF program for this program."
+          ],
+          "signer": true
+        },
+        {
+          "name": "game",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "randomness",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "cancel_game",
+      "docs": [
+        "Base layer. The creator cancels an unfilled lobby and every joined player is",
+        "refunded. Pass the other joined players (seat order) as player2..player4."
+      ],
+      "discriminator": [
+        121,
+        194,
+        154,
+        118,
+        103,
+        235,
+        149,
+        52
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player1",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "player2",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "player3",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "player4",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_pot",
+      "docs": [
+        "Base layer. Pay out the pot after the match has been committed back. The winner",
+        "takes every stake; a draw refunds each player. Pass all players (seat order) as",
+        "player1..player4. Anyone can trigger it."
+      ],
+      "discriminator": [
+        210,
+        85,
+        35,
+        217,
+        204,
+        65,
+        38,
+        17
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player1",
+          "writable": true
+        },
+        {
+          "name": "player2",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "player3",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "player4",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_timeout",
+      "docs": [
+        "ER. Deal with a stalled player. Anyone (e.g. a session key) may trigger it once",
+        "the deadline has passed; the outcome depends only on on-chain state.",
+        "- 2 players: the staller forfeits the match.",
+        "- 3-4 players: the staller's pen is removed for the round and play continues.",
+        "- waiting on the VRF oracle too long: the match aborts as a draw (refunds)."
+      ],
+      "discriminator": [
+        130,
+        234,
+        45,
+        53,
+        120,
+        90,
+        86,
+        178
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "signer": true
+        },
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_game",
+      "docs": [
+        "Base layer. Create a lobby for `max_players` (2..=4) and lock the creator's stake."
+      ],
+      "discriminator": [
+        124,
+        69,
+        75,
+        66,
+        184,
+        220,
+        72,
+        206
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "game_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "game_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player1",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "game_id",
+          "type": "u64"
+        },
+        {
+          "name": "stake",
+          "type": "u64"
+        },
+        {
+          "name": "target_wins",
+          "type": "u8"
+        },
+        {
+          "name": "max_players",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "delegate_game",
+      "docs": [
+        "Base layer. Move the match account onto the Ephemeral Rollup once the lobby is",
+        "full. Set a specific validator via the first remaining account."
+      ],
+      "discriminator": [
+        116,
+        183,
+        70,
+        107,
+        112,
+        223,
+        122,
+        210
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "signer": true
+        },
+        {
+          "name": "buffer_pda",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pda"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                3,
+                185,
+                226,
+                249,
+                238,
+                58,
+                211,
+                101,
+                246,
+                61,
+                82,
+                54,
+                41,
+                8,
+                244,
+                50,
+                16,
+                3,
+                198,
+                31,
+                156,
+                207,
+                45,
+                88,
+                229,
+                45,
+                28,
+                228,
+                17,
+                95,
+                223,
+                92
+              ]
+            }
+          }
+        },
+        {
+          "name": "delegation_record_pda",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pda"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "delegation_metadata_pda",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pda"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "pda",
+          "writable": true
+        },
+        {
+          "name": "owner_program",
+          "address": "FYd5yQ5ntHDUsmjrSbkm3EaxnzNpadtfjYHTQSnaNPM"
+        },
+        {
+          "name": "delegation_program",
+          "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "finish_game",
+      "docs": [
+        "ER -> base. Commit the final state and release the account from the ER.",
+        "Callable by anyone once the match is decided."
+      ],
+      "discriminator": [
+        168,
+        120,
+        86,
+        113,
+        64,
+        116,
+        2,
+        146
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "magic_context",
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "join_game",
+      "docs": [
+        "Base layer. Join an open lobby by matching the stake. The last player to join",
+        "fills the lobby, which becomes READY (and should delegate in the same transaction)."
+      ],
+      "discriminator": [
+        107,
+        112,
+        18,
+        38,
+        56,
+        173,
+        60,
+        128
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "game_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "game_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "_game_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "leave_game",
+      "docs": [
+        "Base layer. A joined player (not the creator) leaves an unfilled lobby and gets",
+        "their stake back; later players shift down a seat."
+      ],
+      "discriminator": [
+        218,
+        226,
+        6,
+        0,
+        243,
+        34,
+        125,
+        201
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "play_flick",
+      "docs": [
+        "ER. Flick your pen. `angle` is in half-degrees (0..720), `power` 1..=100.",
+        "The program simulates the whole flick (see sim.rs) and settles the round when at",
+        "most one pen is left on the desk. Signed by the player's wallet or a session key."
+      ],
+      "discriminator": [
+        246,
+        87,
+        22,
+        132,
+        244,
+        171,
+        51,
+        127
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "session_token",
+          "optional": true
+        }
+      ],
+      "args": [
+        {
+          "name": "angle",
+          "type": "u16"
+        },
+        {
+          "name": "power",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "process_undelegation",
+      "discriminator": [
+        196,
+        28,
+        41,
+        206,
+        48,
+        37,
+        51,
+        167
+      ],
+      "accounts": [
+        {
+          "name": "base_account",
+          "writable": true
+        },
+        {
+          "name": "buffer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  110,
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101,
+                  45,
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "base_account"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                181,
+                183,
+                0,
+                225,
+                242,
+                87,
+                58,
+                192,
+                204,
+                6,
+                34,
+                1,
+                52,
+                74,
+                207,
+                151,
+                184,
+                53,
+                6,
+                235,
+                140,
+                229,
+                25,
+                152,
+                204,
+                98,
+                126,
+                24,
+                147,
+                128,
+                167,
+                62
+              ]
+            }
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "account_seeds",
+          "type": {
+            "vec": "bytes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "request_seed",
+      "docs": [
+        "ER. Ask the VRF oracle for this round's seed (spawn jitter + who flicks first).",
+        "Also advances out of ROUND_OVER into the next round. Callable by anyone."
+      ],
+      "discriminator": [
+        162,
+        96,
+        174,
+        50,
+        178,
+        77,
+        115,
+        152
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "oracle_queue",
+          "writable": true
+        },
+        {
+          "name": "program_identity",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  100,
+                  101,
+                  110,
+                  116,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vrf_program",
+          "address": "Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz"
+        },
+        {
+          "name": "slot_hashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Game",
+      "discriminator": [
+        27,
+        90,
+        166,
+        125,
+        74,
+        100,
+        121,
+        18
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidTargetWins",
+      "msg": "Target wins must be between 1 and 5."
+    },
+    {
+      "code": 6001,
+      "name": "InvalidPlayerCount",
+      "msg": "Player count must be between 2 and 4."
+    },
+    {
+      "code": 6002,
+      "name": "GameFull",
+      "msg": "This lobby is already full."
+    },
+    {
+      "code": 6003,
+      "name": "AlreadyJoined",
+      "msg": "You are already in this match."
+    },
+    {
+      "code": 6004,
+      "name": "NotReady",
+      "msg": "The game is not ready for this."
+    },
+    {
+      "code": 6005,
+      "name": "NotAPlayer",
+      "msg": "Only a player of this game can do this."
+    },
+    {
+      "code": 6006,
+      "name": "WrongPhase",
+      "msg": "Not allowed in the current phase."
+    },
+    {
+      "code": 6007,
+      "name": "NotYourTurn",
+      "msg": "It is not your turn."
+    },
+    {
+      "code": 6008,
+      "name": "InvalidFlick",
+      "msg": "Invalid flick angle or power."
+    },
+    {
+      "code": 6009,
+      "name": "TooEarly",
+      "msg": "Too early to claim a timeout."
+    },
+    {
+      "code": 6010,
+      "name": "MatchNotDecided",
+      "msg": "The match is not decided yet."
+    },
+    {
+      "code": 6011,
+      "name": "AlreadyPaid",
+      "msg": "The pot has already been paid out."
+    },
+    {
+      "code": 6012,
+      "name": "WrongPlayerAccount",
+      "msg": "Wrong player accounts for this game."
+    },
+    {
+      "code": 6013,
+      "name": "CannotCancelStarted",
+      "msg": "Cannot cancel a game that has already started."
+    },
+    {
+      "code": 6014,
+      "name": "CannotLeaveStarted",
+      "msg": "Cannot leave a game that has already started."
+    },
+    {
+      "code": 6015,
+      "name": "CreatorMustCancel",
+      "msg": "The creator must cancel the lobby instead of leaving."
+    },
+    {
+      "code": 6016,
+      "name": "MathOverflow",
+      "msg": "Arithmetic overflow."
+    }
+  ],
+  "types": [
+    {
+      "name": "Game",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "game_id",
+            "type": "u64"
+          },
+          {
+            "name": "players",
+            "docs": [
+              "Seats 0..player_count are filled (seat 0 is the creator); the rest are default."
+            ],
+            "type": {
+              "array": [
+                "pubkey",
+                4
+              ]
+            }
+          },
+          {
+            "name": "player_count",
+            "type": "u8"
+          },
+          {
+            "name": "max_players",
+            "type": "u8"
+          },
+          {
+            "name": "stake",
+            "docs": [
+              "Per-player wager in lamports (0 = free game)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "target_wins",
+            "type": "u8"
+          },
+          {
+            "name": "phase",
+            "type": "u8"
+          },
+          {
+            "name": "winner",
+            "docs": [
+              "0 none, 1..=4 = that seat won, 5 = draw."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "paid",
+            "type": "bool"
+          },
+          {
+            "name": "wins",
+            "type": {
+              "array": [
+                "u8",
+                4
+              ]
+            }
+          },
+          {
+            "name": "round",
+            "docs": [
+              "Current round, 1-based."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "turn",
+            "docs": [
+              "Seat whose flick it is."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "round_result",
+            "docs": [
+              "Result of the most recently decided round (same codes as `winner`)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "flick_count",
+            "type": "u8"
+          },
+          {
+            "name": "seed",
+            "type": "u64"
+          },
+          {
+            "name": "seed_requested_at",
+            "type": "i64"
+          },
+          {
+            "name": "last_action_at",
+            "type": "i64"
+          },
+          {
+            "name": "pens",
+            "docs": [
+              "Live pen state (index = seat; seats beyond `max_players` are marked `out`)."
+            ],
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "Pen"
+                  }
+                },
+                4
+              ]
+            }
+          },
+          {
+            "name": "pre_pens",
+            "docs": [
+              "Pen state right before the latest flick, so any client can replay it."
+            ],
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "Pen"
+                  }
+                },
+                4
+              ]
+            }
+          },
+          {
+            "name": "last_flick_player",
+            "type": "u8"
+          },
+          {
+            "name": "last_flick_angle",
+            "type": "u16"
+          },
+          {
+            "name": "last_flick_power",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Pen",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "x",
+            "type": "i32"
+          },
+          {
+            "name": "z",
+            "type": "i32"
+          },
+          {
+            "name": "vx",
+            "type": "i32"
+          },
+          {
+            "name": "vz",
+            "type": "i32"
+          },
+          {
+            "name": "out",
+            "docs": [
+              "True once the pen's centre has left the desk."
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SessionTokenV2",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "target_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "session_signer",
+            "type": "pubkey"
+          },
+          {
+            "name": "fee_payer",
+            "type": "pubkey"
+          },
+          {
+            "name": "valid_until",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}
