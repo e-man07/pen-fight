@@ -1,0 +1,8 @@
+{
+  "name": "pen-fight-anchor",
+  "private": true,
+  "scripts": {
+    "build": "anchor-1.0.2 build",
+    "test:local": "cd ../web && NEXT_PUBLIC_CLUSTER=local PLAYERS=3 npx tsx scripts/e2e.ts"
+  }
+}
