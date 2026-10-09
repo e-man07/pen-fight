@@ -1,9 +1,7 @@
 /**
- * Background audio, all synthesized with WebAudio (no audio files):
+ * Background music, synthesized with WebAudio (no audio files):
  *  - a joyful, bouncy loop (~108 BPM, C-G-Am-F): marimba-style plucks, a springy bass,
  *    a light shaker, soft claps, a gentle pad
- *  - children whispering around the room: breathy formant-filtered syllables, the odd
- *    "psst" and a quiet giggle, panned left/right through a little reverb
  * Browsers block audio until a user gesture, so call start() from one.
  * (Class name kept for the existing toggle.)
  */
@@ -21,15 +19,6 @@ const BARS = [
 ];
 // C major pentatonic for the little melody (one octave above the arpeggio).
 const MELODY = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5, 1174.66];
-// Rough child-ish vowel formants [F1, F2] for the whispers.
-const VOWELS = [
-  [850, 2500], // "ah"
-  [550, 2800], // "eh"
-  [380, 3100], // "ee"
-  [700, 2000], // "ae"
-  [480, 1200], // "oh"
-];
-
 function noiseBuffer(ctx: AudioContext, seconds: number): AudioBuffer {
   const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * seconds), ctx.sampleRate);
   const d = buf.getChannelData(0);
@@ -47,14 +36,12 @@ function reverbImpulse(ctx: AudioContext, seconds: number, decay: number): Audio
   return buf;
 }
 
-const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
 export class Ambience {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private musicBus: GainNode | null = null;
-  private roomBus: GainNode | null = null;
   private noise: AudioBuffer | null = null;
   private timers: ReturnType<typeof setTimeout>[] = [];
   private tick: ReturnType<typeof setInterval> | null = null;
@@ -117,21 +104,9 @@ export class Ambience {
       musicLp.connect(musicSend).connect(verb);
       this.musicBus = musicBus;
 
-      // Whispers: distant, with plenty of room.
-      const roomBus = ctx.createGain();
-      roomBus.gain.value = 1;
-      const roomDry = ctx.createGain();
-      roomDry.gain.value = 0.7;
-      roomBus.connect(roomDry).connect(master);
-      const roomSend = ctx.createGain();
-      roomSend.gain.value = 0.8;
-      roomBus.connect(roomSend).connect(verb);
-      this.roomBus = roomBus;
-
       this.nextTime = ctx.currentTime + 0.15;
       this.tick = setInterval(() => this.schedule(), 250);
       this.schedule();
-      this.scheduleWhispers();
       master.gain.linearRampToValueAtTime(this.muted ? 0 : VOLUME, ctx.currentTime + 2.5);
     } catch {
       this.ctx = null;
@@ -294,101 +269,5 @@ export class Ambience {
     o.connect(g);
     o.start(t);
     o.stop(t + dur + 0.5);
-  }
-
-  // ---------------------------------------------------------------- whispers
-
-  private scheduleWhispers(): void {
-    const next = () => {
-      if (this.stopped || !this.ctx) return;
-      const t = this.ctx.currentTime + 0.05;
-      const r = Math.random();
-      const pan = rnd(-0.85, 0.85);
-      if (r < 0.5) {
-        this.whisper(t, pan, 1.0);
-      } else if (r < 0.72) {
-        // a quick whispered back-and-forth
-        this.whisper(t, pan, 1.0);
-        this.whisper(t + rnd(0.7, 1.2), -pan, 0.85);
-      } else if (r < 0.88) {
-        this.psst(t, pan);
-      } else {
-        this.giggle(t, pan);
-      }
-      this.timers.push(setTimeout(next, rnd(2400, 5600)));
-    };
-    this.timers.push(setTimeout(next, 1800));
-  }
-
-  /** Breathy "kids whispering" phrase: noise through two formant filters, syllable by syllable. */
-  private whisper(when: number, pan: number, level: number): void {
-    const ctx = this.ctx;
-    if (!ctx || !this.roomBus || !this.noise) return;
-    const out = ctx.createGain();
-    out.gain.value = 1.1 * level;
-    const panner = ctx.createStereoPanner();
-    panner.pan.value = pan;
-    out.connect(panner).connect(this.roomBus);
-
-    const syllables = 3 + Math.floor(Math.random() * 5);
-    let t = when;
-    for (let i = 0; i < syllables; i++) {
-      const dur = rnd(0.07, 0.15);
-      const [f1, f2] = pick(VOWELS);
-      const contour = 1 - i * 0.07;
-      const src = ctx.createBufferSource();
-      src.buffer = this.noise;
-      src.loop = true;
-      const b1 = ctx.createBiquadFilter();
-      b1.type = "bandpass";
-      b1.frequency.value = f1;
-      b1.Q.value = 6;
-      const b2 = ctx.createBiquadFilter();
-      b2.type = "bandpass";
-      b2.frequency.value = f2;
-      b2.Q.value = 8;
-      const g1 = ctx.createGain();
-      g1.gain.value = 1;
-      const g2 = ctx.createGain();
-      g2.gain.value = 0.8;
-      const env = ctx.createGain();
-      env.gain.setValueAtTime(0.0001, t);
-      env.gain.exponentialRampToValueAtTime(contour, t + 0.025);
-      env.gain.setValueAtTime(contour, t + dur * 0.6);
-      env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      src.connect(b1).connect(g1).connect(env);
-      src.connect(b2).connect(g2).connect(env);
-      env.connect(out);
-      src.start(t, Math.random());
-      src.stop(t + dur + 0.05);
-      // a hushed "sh/s" onset on many syllables
-      if (Math.random() < 0.55) this.noiseHit(t - 0.02, "highpass", 5200, 0.8, 0.07, 0.05 * level, out);
-      t += dur + rnd(0.03, 0.08);
-    }
-  }
-
-  /** "Psst!" */
-  private psst(when: number, pan: number): void {
-    const ctx = this.ctx;
-    if (!ctx || !this.roomBus) return;
-    const panner = ctx.createStereoPanner();
-    panner.pan.value = pan;
-    panner.connect(this.roomBus);
-    this.noiseHit(when, "highpass", 4800, 0.9, 0.28, 0.1, panner);
-  }
-
-  /** A quiet breathy giggle: a few falling "ha"s. */
-  private giggle(when: number, pan: number): void {
-    const ctx = this.ctx;
-    if (!ctx || !this.roomBus) return;
-    const panner = ctx.createStereoPanner();
-    panner.pan.value = pan;
-    panner.connect(this.roomBus);
-    const n = 4 + Math.floor(Math.random() * 3);
-    for (let i = 0; i < n; i++) {
-      const t = when + i * 0.12;
-      this.noiseHit(t, "bandpass", 1500 - i * 80, 3, 0.09, 0.11 * (1 - i * 0.12), panner);
-      this.noiseHit(t, "bandpass", 2900 - i * 120, 4, 0.08, 0.06 * (1 - i * 0.12), panner);
-    }
   }
 }
