@@ -39,10 +39,10 @@ export function SoundToggle() {
       aria-pressed={muted}
       aria-label={muted ? "Turn music on" : "Mute music"}
       title={muted ? "Turn music on" : "Mute music"}
-      className="glass font-hand fixed bottom-8 right-3 z-40 flex items-center gap-2 !rounded-full px-4 py-2 text-lg leading-none text-chalk transition hover:brightness-125"
+      className="glass font-hand fixed bottom-3 right-3 z-40 flex items-center gap-2 !rounded-full px-3 py-2 text-lg leading-none text-chalk transition hover:brightness-125 sm:bottom-8 sm:px-4"
     >
       <span className="text-xl">{muted ? "🔇" : "🎵"}</span>
-      <span>{muted ? "Music off" : "Music on"}</span>
+      <span className="hidden sm:inline">{muted ? "Music off" : "Music on"}</span>
     </button>
   );
 }
