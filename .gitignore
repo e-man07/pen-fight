@@ -1,0 +1,12 @@
+node_modules
+.next
+anchor/target
+anchor/.anchor
+.env*.local
+.DS_Store
+*.log
+magicblock-test-storage
+test-ledger
+.next-*
+tsconfig.tsbuildinfo
+anchor/node_modules
