@@ -23,6 +23,10 @@ export interface CharacterLook {
   style: 0 | 1 | 2 | 3;
 }
 
+/** neutral rest pose: hands on the lap / just over the character's own edge, off the playing area */
+const REST_X = 1.5;
+const REST_Y = 2.3;
+const REST_Z = -1.4;
 const L1 = 3.2;
 const L2 = 3.0;
 const DESK_LY = -SEAT_Y; // desk top height in character-local space
@@ -244,14 +248,15 @@ export function Character({
       pitch: 0,
       dirx: 0,
       dirz: -1,
-      tipR: new THREE.Vector3(1.5, DESK_LY + 0.4, -3),
-      tipL: new THREE.Vector3(-1.6, DESK_LY + 0.25, -3.6),
+      tipR: new THREE.Vector3(REST_X, REST_Y, REST_Z),
+      tipL: new THREE.Vector3(-REST_X, REST_Y, REST_Z),
       nextBlink: 1.5,
       blink: 0,
       mood: { ...MOODS.focus },
       init: false,
       shock: 0,
       roll: 0,
+      reach: 0,
     }),
     [],
   );
@@ -298,6 +303,7 @@ export function Character({
 
     // ---- right hand target (local space) ---------------------------------
     let tx: number, ty: number, tz: number;
+    let useReach = false;
     let rate = 8;
     let finger = 0.5;
     if (cel === 1) {
@@ -316,6 +322,7 @@ export function Character({
       ty = DESK_LY + 2.6;
       tz = -2.6;
     } else if (penOk) {
+      useReach = true;
       const back0 = 0.85 + c.wind * 2.1;
       const back = back0 + (-0.2 - back0) * c.lunge;
       const hy0 = 0.28 + c.wind * 1.2;
@@ -330,9 +337,23 @@ export function Character({
         finger = -0.5;
       }
     } else {
-      tx = 1.6;
-      ty = DESK_LY + 0.3 + st.shock * 1.8;
-      tz = -3.6;
+      tx = REST_X;
+      ty = REST_Y + st.shock * 1.8;
+      tz = REST_Z;
+    }
+    // the hand only reaches onto the desk on this player's turn / while aiming or striking;
+    // otherwise (and right after the hit) it withdraws to the rest pose
+    const flicking = c.mode === "aim" || c.mode === "auto" || c.mode === "strike" || c.mode === "hold" || (c.mode === "recover" && c.t < 0);
+    const myTurn = info.turn === seat && cel === 0 && !eliminated && game.phase === "none" && c.mode === "idle";
+    const reachT = cel === 0 && penOk && (flicking || myTurn) ? 1 : 0;
+    st.reach = damp(st.reach, reachT, reachT > st.reach ? (c.mode === "strike" ? 40 : 9) : 9, dt);
+    if (useReach) {
+      const r = st.reach;
+      tx = REST_X + (tx - REST_X) * r;
+      ty = REST_Y + (ty - REST_Y) * r + 4 * r * (1 - r) * 1.1;
+      tz = REST_Z + (tz - REST_Z) * r;
+      finger = 0.5 + (finger - 0.5) * r;
+      rate = 40;
     }
     if (!st.init) {
       st.tipR.set(tx, ty, tz);
@@ -343,9 +364,10 @@ export function Character({
     st.tipR.z = damp(st.tipR.z, tz, rate, dt);
 
     // ---- left hand target ------------------------------------------------
-    let lx = -1.6,
-      ly = DESK_LY + 0.25 + st.shock * 3.2,
-      lz = -3.6 - c.wind * 0.6;
+    const rl = st.reach;
+    let lx = -REST_X + (-1.6 + REST_X) * rl,
+      ly = REST_Y + (DESK_LY + 0.25 - REST_Y) * rl + st.shock * 3.2,
+      lz = REST_Z + (-3.4 - c.wind * 0.6 - REST_Z) * rl;
     if (st.shock > 0.4) {
       lx = -0.9;
       lz = -2.6;
