@@ -13,6 +13,18 @@ to the target wins the match and the whole pot.
   No free play: every player's stake goes into the pot.
 * **vs Bot:** 1-3 bots (easy/medium/hard), no wallet, no stake, nothing on-chain, same physics.
 
+## Deployed on Solana devnet
+
+| | |
+|---|---|
+| **Program ID** | [`FYd5yQ5ntHDUsmjrSbkm3EaxnzNpadtfjYHTQSnaNPM`](https://explorer.solana.com/address/FYd5yQ5ntHDUsmjrSbkm3EaxnzNpadtfjYHTQSnaNPM?cluster=devnet) |
+| **Cluster** | Solana **devnet** (no real funds) |
+| **Ephemeral Rollup** | MagicBlock devnet US, `https://devnet-us.magicblock.app` (validator `MUS3hc9TCw4cGC12vHNoYcCGzJG1txjgQLZWVoeNHNd`) |
+| **VRF queue** | `5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc` |
+| **Framework** | Anchor 1.0.2, `ephemeral-rollups-sdk` 0.16.2, `session-keys` 3.1 |
+
+The web app points at this program by default. The program id is also set in `web/lib/game.ts`.
+
 ## Why it's a MagicBlock game (and not just a Solana game)
 
 | MagicBlock feature | How Pen Fight uses it |
@@ -84,7 +96,8 @@ web/                       Next.js 16 app (deploys straight to Vercel)
   components/scene/        the 3D classroom, desk, pens and student characters (three.js)
   components/Lobby.tsx     create / join / open matches
   components/GameScreen.tsx HUD, results, on-chain activity log
-  scripts/e2e.ts           headless two-player end-to-end test against a cluster
+  scripts/e2e.ts           headless N-player (2-4) end-to-end test against a cluster
+  scripts/check-sim.ts     checks the TS physics against the Rust test vectors
 ```
 
 ## Run it locally (no devnet SOL needed)
@@ -110,6 +123,10 @@ NEXT_PUBLIC_CLUSTER=local PLAYERS=4 npx tsx scripts/e2e.ts     # also PLAYERS=2 
 NEXT_PUBLIC_CLUSTER=local pnpm dev
 ```
 
+If you have a `web/.env.local` that sets `NEXT_PUBLIC_BASE_RPC`/`NEXT_PUBLIC_BASE_WS` (e.g. a private
+devnet RPC), it overrides the local-cluster URLs. Either remove those lines or override them in the
+shell: `NEXT_PUBLIC_BASE_RPC=http://localhost:8899 NEXT_PUBLIC_BASE_WS=ws://localhost:8900 pnpm dev`.
+
 ## Deploy
 
 **1. Program → devnet** (needs ~3-4 devnet SOL in the deploy wallet for the first deploy *or* an
@@ -125,8 +142,10 @@ The program id (`FYd5yQ5ntHDUsmjrSbkm3EaxnzNpadtfjYHTQSnaNPM`) comes from
 generate a new keypair, run `anchor keys sync` and update `PROGRAM_ID` in `web/lib/game.ts`.
 
 **2. Web → Vercel**: import the repo, set **Root Directory = `web`**. No env vars are required
-(defaults point at devnet + the MagicBlock devnet-US rollup). Optionally set `NEXT_PUBLIC_BASE_RPC` to a
-private RPC for reliability — see `web/.env.example`.
+(defaults point at devnet + the MagicBlock devnet-US rollup). For reliability set `NEXT_PUBLIC_BASE_RPC`
+and `NEXT_PUBLIC_BASE_WS` to a private devnet RPC (see `web/.env.example`). `NEXT_PUBLIC_*` values are
+bundled into the browser, so use a key restricted to your site's domain (and keep a separate unrestricted
+key for local development).
 
 ## Notes & limits
 
@@ -135,3 +154,10 @@ private RPC for reliability — see `web/.env.example`.
   on the base layer is the last checkpoint; there is no operator-rescue path in this MVP.
 * The Guest Wallet stores a throwaway keypair in `localStorage` for no-install demos.
   Disable it with `NEXT_PUBLIC_GUEST_WALLET=0`.
+
+## Acknowledgements
+
+The delegate / commit / undelegate flow, the vault-escrow pattern and the VRF and session-key
+integration follow the examples in
+[magicblock-labs/magicblock-engine-examples](https://github.com/magicblock-labs/magicblock-engine-examples)
+(notably `rock-paper-scissor`, `roll-dice` and `session-keys`).
