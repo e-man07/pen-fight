@@ -26,6 +26,11 @@ function isStale(gameId: bigint): boolean {
   return Date.now() - Number(gameId / 1000n) > 10 * 60 * 1000;
 }
 
+/** Lobbies open for over an hour are treated as abandoned and left out of the list. */
+function isAbandoned(gameId: bigint): boolean {
+  return Date.now() - Number(gameId / 1000n) > 60 * 60 * 1000;
+}
+
 export function rememberGame(id: bigint | null) {
   try {
     if (id === null) localStorage.removeItem(LAST_KEY);
@@ -73,7 +78,7 @@ export function Lobby({
   const refresh = useCallback(async () => {
     if (!client) return;
     try {
-      setOpen(await client.listOpenGames());
+      setOpen((await client.listOpenGames()).filter((g) => !isAbandoned(g.gameId)));
     } catch {
       setOpen((o) => o ?? []);
     }
