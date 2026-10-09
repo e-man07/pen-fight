@@ -5,7 +5,10 @@ import type { GameClient } from "@/lib/client";
 import { CLUSTER, explorerTx } from "@/lib/config";
 import {
   PHASE,
+  TURN_TIMEOUT,
+  flicksLeft,
   WINNER,
+  FLICKS_PER_PLAYER,
   lamportsToSol,
   maxFlicks,
   shortKey,
@@ -46,6 +49,8 @@ function PlayerCard({
   me,
   active,
   showKey,
+  left,
+  secondsLeft,
 }: {
   g: GameState;
   idx: number;
@@ -53,16 +58,24 @@ function PlayerCard({
   me: boolean;
   active: boolean;
   showKey: boolean;
+  /** Flicks this player has left in the round. */
+  left: number;
+  /** Seconds left on the turn timer (null = no limit, e.g. practice). */
+  secondsLeft: number | null;
 }) {
   const pk = g.players[idx];
   const color = seatColor(idx);
-  const out = g.phase === PHASE.PLAYING && !!g.pens[idx]?.out;
+  const playing = g.phase === PHASE.PLAYING;
+  const out = playing && !!g.pens[idx]?.out;
+  const urgent = secondsLeft !== null && secondsLeft <= 10;
+  const frac = secondsLeft === null ? 1 : Math.max(0, Math.min(1, secondsLeft / TURN_TIMEOUT));
+  const accent = urgent ? "#ff5a4d" : color;
   return (
     <div
-      className={`panel flex min-w-[7.5rem] flex-col gap-1 px-3 py-2 sm:min-w-[8.5rem] ${
+      className={`panel flex w-[10.5rem] flex-col gap-1.5 px-3 py-2.5 sm:w-[12rem] ${
         active ? "pulse-ring" : ""
       } ${out ? "opacity-60" : ""}`}
-      style={{ borderColor: active ? color : undefined }}
+      style={{ borderColor: active ? accent : undefined, borderWidth: active ? 3 : undefined }}
     >
       <div className="flex items-center gap-2">
         <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: color }} />
@@ -70,8 +83,114 @@ function PlayerCard({
         {me && <span className="chip !py-0 text-[0.65rem]">you</span>}
         {out && <span className="chip !py-0 text-[0.65rem]">out</span>}
       </div>
-      {pk && showKey && <div className="text-[0.7rem] text-chalk/50">{shortKey(pk)}</div>}
-      <Pips wins={g.wins[idx] ?? 0} target={g.targetWins} color={color} />
+      {pk && showKey && <div className="-mt-1 text-[0.7rem] text-chalk/50">{shortKey(pk)}</div>}
+
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-hand text-xs uppercase tracking-wider text-chalk/55">wins</span>
+        <Pips wins={g.wins[idx] ?? 0} target={g.targetWins} color={color} />
+      </div>
+
+      {playing && !out && (
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-hand text-xs uppercase tracking-wider text-chalk/55">flicks left</span>
+          <div className="flex items-center gap-2">
+            <div className="flex gap-[3px]">
+              {Array.from({ length: FLICKS_PER_PLAYER }, (_, i) => (
+                <span
+                  key={i}
+                  className="h-2 w-[10px] rounded-full"
+                  style={{ background: i < left ? color : "rgba(255,255,255,0.16)" }}
+                />
+              ))}
+            </div>
+            <span className="font-hand w-3 text-right text-lg leading-none">{left}</span>
+          </div>
+        </div>
+      )}
+
+      {active && !out && (
+        <div className="mt-0.5 rounded-lg bg-black/30 px-2.5 py-1.5">
+          <div className="flex items-end justify-between">
+            <span className="font-hand text-lg leading-none" style={{ color: accent }}>
+              {me ? "YOUR TURN" : "THEIR TURN"}
+            </span>
+            {secondsLeft !== null && (
+              <span
+                className="font-hand text-4xl leading-none tabular-nums"
+                style={{ color: urgent ? "#ff9a90" : "#f6f3e8" }}
+              >
+                {Math.ceil(secondsLeft)}
+                <span className="text-base text-chalk/60">s</span>
+              </span>
+            )}
+          </div>
+          {secondsLeft !== null && (
+            <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-white/15">
+              <div
+                className="h-full rounded-full transition-[width] duration-300"
+                style={{ width: `${frac * 100}%`, background: accent }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const RULES_SEEN_KEY = "penfight:rules-seen";
+
+function RulesCard({
+  players,
+  targetWins,
+  staked,
+  timed,
+  onClose,
+}: {
+  players: number;
+  targetWins: number;
+  staked: boolean;
+  timed: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <div className="absolute inset-0 z-40 grid place-items-center bg-black/60 p-4" onClick={onClose}>
+      <div className="panel pop-in w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+        <h2 className="font-hand text-4xl">How to play</h2>
+        <ol className="font-hand mt-3 list-decimal space-y-1.5 pl-6 text-xl leading-snug text-chalk/90">
+          <li>
+            <b>Drag back</b> from the desk and <b>let go</b> to flick your pen. The further you
+            drag, the harder the flick.
+          </li>
+          <li>
+            {players === 2
+              ? "Knock the other pen off the desk edge to win the round."
+              : "Knock the other pens off the desk. The last pen on the desk wins the round."}
+          </li>
+          <li>
+            Each player gets up to <b>{FLICKS_PER_PLAYER} flicks</b> per round ({maxFlicks(players)} in
+            total). If more than one pen is still on the desk after that, the pen{" "}
+            <b>furthest from the edge</b> wins.
+          </li>
+          {timed && (
+            <li>
+              You have <b>{TURN_TIMEOUT} seconds</b> per turn. The timer is at the top of the screen.{" "}
+              {players === 2
+                ? "If you stall, your opponent can claim the whole match."
+                : "If you stall, your pen is removed for that round."}
+            </li>
+          )}
+          <li>
+            First to <b>{targetWins} round win{targetWins > 1 ? "s" : ""}</b> takes the match
+            {staked ? " and the whole pot" : ""}. A drawn round is replayed.
+          </li>
+        </ol>
+        <div className="mt-5 flex justify-center">
+          <button className="btn" onClick={onClose}>
+            Got it
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -98,6 +217,24 @@ export function GameScreen({
   const isLocal = !!local;
   const [showLog, setShowLog] = useState(false);
   const [copied, setCopied] = useState(false);
+  // The how-to-play card opens by itself the first time a match starts playing.
+  const [rulesSeen, setRulesSeen] = useState(() => {
+    try {
+      return localStorage.getItem(RULES_SEEN_KEY) === "1";
+    } catch {
+      return true;
+    }
+  });
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const closeRules = () => {
+    setRulesOpen(false);
+    setRulesSeen(true);
+    try {
+      localStorage.setItem(RULES_SEEN_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+  };
 
   useEffect(() => {
     if (!isLocal && gameId !== null) rememberGame(gameId);
@@ -202,6 +339,7 @@ export function GameScreen({
   })();
 
   const lastTx = m.txLog[0];
+  const left = g ? flicksLeft(g) : [];
   const others = g ? Array.from({ length: n }, (_, i) => i).filter((i) => i !== seat) : [];
   const stalledText =
     g && g.maxPlayers === 2
@@ -246,6 +384,8 @@ export function GameScreen({
                 me={m.seat !== null}
                 active={g.phase === PHASE.PLAYING && g.turn === seat}
                 showKey={!isLocal}
+                left={left[seat] ?? 0}
+                secondsLeft={isLocal ? null : m.turnSecondsLeft}
               />
             )}
           </div>
@@ -270,9 +410,9 @@ export function GameScreen({
                   <>
                     <div className="h-8 w-px bg-chalk/20" />
                     <div className="text-center">
-                      <div className="font-hand text-sm leading-none text-chalk/60">FLICKS</div>
+                      <div className="font-hand text-sm leading-none text-chalk/60">FLICKS LEFT</div>
                       <div className="font-hand text-2xl leading-none">
-                        {g.flickCount}
+                        {Math.max(0, maxFlicks(g.maxPlayers) - g.flickCount)}
                         <span className="text-base text-chalk/50">/{maxFlicks(g.maxPlayers)}</span>
                       </div>
                     </div>
@@ -280,22 +420,31 @@ export function GameScreen({
                 )}
               </div>
             )}
-            <span
-              className={`chip pointer-events-auto ${isLocal ? "" : "cursor-pointer"} ${
-                m.layer === "er" ? "!border-marker/60 !text-marker" : ""
-              }`}
-              onClick={() => !isLocal && setShowLog((v) => !v)}
-              title={isLocal ? "Practice match, nothing on-chain" : "Show on-chain activity"}
-            >
-              {isLocal
-                ? `🤖 Practice vs ${n - 1} bot${n > 2 ? "s" : ""} · off-chain`
-                : m.layer === "er"
-                  ? "⚡ Ephemeral Rollup"
-                  : m.layer === "base"
-                    ? "◎ Solana base layer"
-                    : "…"}
-              {lastTx && lastTx.layer === "er" ? ` · last tx ${lastTx.ms}ms` : ""}
-            </span>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <span
+                className={`chip pointer-events-auto ${isLocal ? "" : "cursor-pointer"} ${
+                  m.layer === "er" ? "!border-marker/60 !text-marker" : ""
+                }`}
+                onClick={() => !isLocal && setShowLog((v) => !v)}
+                title={isLocal ? "Practice match, nothing on-chain" : "Show on-chain activity"}
+              >
+                {isLocal
+                  ? `🤖 Practice vs ${n - 1} bot${n > 2 ? "s" : ""} · off-chain`
+                  : m.layer === "er"
+                    ? "⚡ Ephemeral Rollup"
+                    : m.layer === "base"
+                      ? "◎ Solana base layer"
+                      : "…"}
+                {lastTx && lastTx.layer === "er" ? ` · last tx ${lastTx.ms}ms` : ""}
+              </span>
+              <button
+                className="chip pointer-events-auto cursor-pointer"
+                onClick={() => setRulesOpen(true)}
+                title="How to play"
+              >
+                ❓ Rules
+              </button>
+            </div>
           </div>
 
           <div className="pointer-events-auto flex flex-col items-end gap-2">
@@ -310,6 +459,8 @@ export function GameScreen({
                   me={false}
                   active={g.phase === PHASE.PLAYING && g.turn === i}
                   showKey={!isLocal}
+                  left={left[i] ?? 0}
+                  secondsLeft={isLocal ? null : m.turnSecondsLeft}
                 />
               ))}
           </div>
@@ -353,14 +504,10 @@ export function GameScreen({
             </div>
           )}
 
+          {(g?.phase !== PHASE.PLAYING || m.busy || m.canClaimTimeout) && (
           <div className="panel pop-in pointer-events-auto flex max-w-xl flex-wrap items-center justify-center gap-3 px-5 py-3">
-            <span className="font-hand text-2xl leading-tight">{m.busy ?? status}</span>
-            {g?.phase === PHASE.PLAYING && m.turnSecondsLeft !== null && !m.animating && (
-              <span
-                className={`chip font-mono ${m.turnSecondsLeft < 10 ? "!border-pfred !text-pfred" : ""}`}
-              >
-                {Math.ceil(m.turnSecondsLeft)}s
-              </span>
+            {(g?.phase !== PHASE.PLAYING || m.busy) && (
+              <span className="font-hand text-2xl leading-tight">{m.busy ?? status}</span>
             )}
             {m.canClaimTimeout && g?.phase === PHASE.PLAYING && (
               <button className="btn btn-danger !text-base" onClick={m.claimTimeout}>
@@ -378,8 +525,20 @@ export function GameScreen({
               </button>
             )}
           </div>
+          )}
         </div>
       </div>
+
+      {/* ------------------------------------------------------------- how to play */}
+      {(rulesOpen || (!rulesSeen && g?.phase === PHASE.PLAYING)) && g && (
+        <RulesCard
+          players={g.maxPlayers}
+          targetWins={g.targetWins}
+          staked={!isLocal && g.stake > 0n}
+          timed={!isLocal}
+          onClose={closeRules}
+        />
+      )}
 
       {/* --------------------------------------------------------- waiting room */}
       {g?.phase === PHASE.OPEN && (
