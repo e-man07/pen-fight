@@ -7,6 +7,7 @@ import {
   Connection,
   Keypair,
   PublicKey,
+  SystemProgram,
   Transaction,
   TransactionInstruction,
   sendAndConfirmTransaction,
@@ -83,8 +84,11 @@ export class GameClient {
   readonly er: Connection;
   readonly program: Program;
   readonly erProgram: Program;
-  readonly session: Keypair;
+  /** Session signer for gasless in-match moves. Replaced when its token expires. */
+  session: Keypair;
   private readonly sessions: SessionTokenManager;
+  private readonly store: KeyValueStore;
+  private readonly storeKey: string;
 
   constructor(
     readonly wallet: WalletLike,
@@ -115,7 +119,9 @@ export class GameClient {
     this.sessions = new SessionTokenManager(walletShim, this.base);
 
     // One session keypair per wallet, persisted locally.
-    const storeKey = `penfight:session:${wallet.publicKey.toBase58()}`;
+    this.store = store;
+    this.storeKey = `penfight:session:${wallet.publicKey.toBase58()}`;
+    const storeKey = this.storeKey;
     const saved = store.get(storeKey);
     let kp: Keypair | null = null;
     if (saved) {
@@ -138,39 +144,51 @@ export class GameClient {
 
   // ------------------------------------------------------------------ sessions
 
-  sessionTokenAddress(authority: PublicKey = this.me): PublicKey {
+  sessionTokenAddress(
+    authority: PublicKey = this.me,
+    signer: PublicKey = this.session.publicKey,
+  ): PublicKey {
     return PublicKey.findProgramAddressSync(
       [
         Buffer.from(sessionTokenSeed),
         PROGRAM_ID.toBytes(),
-        this.session.publicKey.toBytes(),
+        signer.toBytes(),
         authority.toBytes(),
       ],
       this.sessions.program.programId,
     )[0];
   }
 
-  /** True if a live session token for this wallet + session key already exists. */
-  async hasValidSession(): Promise<boolean> {
+  /**
+   * State of this wallet's session: "missing" (no token yet), "expired" (token
+   * exists but runs out within 10 min), "low" (token valid, signer can't pay
+   * fees), or "ok".
+   */
+  private async sessionState(): Promise<"missing" | "expired" | "low" | "ok"> {
     const info = await this.base.getAccountInfo(this.sessionTokenAddress());
-    if (!info) return false;
+    if (!info) return "missing";
+    let validUntil = 0;
     try {
       // SessionTokenV2 layout: 8 disc | authority | target_program | session_signer |
       // fee_payer (4 x 32 bytes) | valid_until i64
       const d = info.data;
-      const validUntil = Number(
+      validUntil = Number(
         new DataView(d.buffer, d.byteOffset, d.byteLength).getBigInt64(8 + 32 * 4, true),
       );
-      const balance = await this.base.getBalance(this.session.publicKey);
-      return validUntil > Date.now() / 1000 + 600 && balance > 2_000_000;
     } catch {
-      return false;
+      return "expired";
     }
+    if (validUntil <= Date.now() / 1000 + 600) return "expired";
+    const balance = await this.base.getBalance(this.session.publicKey);
+    return balance > 2_000_000 ? "ok" : "low";
   }
 
-  /** Instruction that (re)creates the session token; null if one is still valid. */
-  private async sessionInstruction(): Promise<TransactionInstruction | null> {
-    if (await this.hasValidSession()) return null;
+  /** True if a live, funded session token for this wallet + session key exists. */
+  async hasValidSession(): Promise<boolean> {
+    return (await this.sessionState()) === "ok";
+  }
+
+  private createSessionIx(signer: PublicKey): Promise<TransactionInstruction> {
     return this.sessions.program.methods
       .createSessionV2(
         true,
@@ -179,11 +197,72 @@ export class GameClient {
       )
       .accounts({
         targetProgram: PROGRAM_ID,
-        sessionSigner: this.session.publicKey,
+        sessionSigner: signer,
         feePayer: this.me,
         authority: this.me,
       })
       .instruction();
+  }
+
+  /**
+   * Instructions that make the session usable, to prepend to a wallet-signed
+   * transaction. `signers` must co-sign it; call `commit()` once it confirms.
+   *
+   * The session token is a PDA of (session key, wallet), and createSessionV2
+   * `init`s it, so it can never be created twice for the same key: retrying
+   * after the token expired failed with System error 0x0 ("account already in
+   * use") and locked the wallet out of creating or joining matches. An expired
+   * token therefore gets a NEW session key (new PDA), and the old token is
+   * revoked in the same transaction to return its rent. A valid token whose
+   * signer ran low on SOL is just topped up.
+   */
+  private async sessionSetup(): Promise<{
+    ixs: TransactionInstruction[];
+    signers: Keypair[];
+    commit: () => void;
+  }> {
+    const none = { ixs: [], signers: [], commit: () => {} };
+    const state = await this.sessionState();
+    if (state === "ok") return none;
+    if (state === "low") {
+      return {
+        ...none,
+        ixs: [
+          SystemProgram.transfer({
+            fromPubkey: this.me,
+            toPubkey: this.session.publicKey,
+            lamports: SESSION_TOP_UP_LAMPORTS,
+          }),
+        ],
+      };
+    }
+    if (state === "missing") {
+      return {
+        ixs: [await this.createSessionIx(this.session.publicKey)],
+        signers: [this.session],
+        commit: () => {},
+      };
+    }
+    // expired
+    const fresh = Keypair.generate();
+    const revoke = await this.sessions.program.methods
+      .revokeSessionV2()
+      .accounts({
+        sessionToken: this.sessionTokenAddress(),
+        feePayer: this.me,
+        authority: this.me,
+      })
+      .instruction();
+    return {
+      ixs: [revoke, await this.createSessionIx(fresh.publicKey)],
+      signers: [fresh],
+      // Only switch keys once the new token exists on chain; a rejected popup
+      // leaves the old key (and its expired token) in place to retry with.
+      commit: () => {
+        this.session = fresh;
+        this.store.set(this.storeKey, JSON.stringify(Array.from(fresh.secretKey)));
+      },
+    };
   }
 
   // -------------------------------------------------------------------- sending
@@ -290,8 +369,8 @@ export class GameClient {
     const gameId = BigInt(Date.now()) * 1000n + BigInt(Math.floor(Math.random() * 1000));
     const idBn = new BN(gameId.toString());
     const ixs: TransactionInstruction[] = [];
-    const sess = await this.sessionInstruction();
-    if (sess) ixs.push(sess);
+    const sess = await this.sessionSetup();
+    ixs.push(...sess.ixs);
     ixs.push(
       await this.program.methods
         .createGame(idBn, new BN(stakeLamports.toString()), targetWins, maxPlayers)
@@ -302,7 +381,8 @@ export class GameClient {
         })
         .instruction(),
     );
-    await this.sendWithWallet(ixs, sess ? [this.session] : []);
+    await this.sendWithWallet(ixs, sess.signers);
+    sess.commit();
     return gameId;
   }
 
@@ -318,8 +398,8 @@ export class GameClient {
 
     const idBn = new BN(gameId.toString());
     const ixs: TransactionInstruction[] = [];
-    const sess = await this.sessionInstruction();
-    if (sess) ixs.push(sess);
+    const sess = await this.sessionSetup();
+    ixs.push(...sess.ixs);
     ixs.push(
       await this.program.methods
         .joinGame(idBn)
@@ -341,7 +421,8 @@ export class GameClient {
           .instruction(),
       );
     }
-    await this.sendWithWallet(ixs, sess ? [this.session] : []);
+    await this.sendWithWallet(ixs, sess.signers);
+    sess.commit();
   }
 
   /** Delegate a full lobby that was not yet moved to the ER (recovery path). */
