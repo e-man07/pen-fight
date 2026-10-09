@@ -1,4 +1,15 @@
-# 🖊️ Pen Fight
+<p align="center">
+  <img src="web/public/logo.png" alt="Pen Fight" width="260" />
+</p>
+
+<p align="center">
+  <b>The last-bench classroom pen fight, on-chain.</b><br/>
+  <a href="https://penfight.whyparabola.online/"><b>▶ Play it live</b></a> ·
+  <a href="https://explorer.solana.com/address/FYd5yQ5ntHDUsmjrSbkm3EaxnzNpadtfjYHTQSnaNPM?cluster=devnet">Program on Solana devnet</a> ·
+  <a href="#why-its-a-magicblock-game-and-not-just-a-solana-game">How it uses MagicBlock</a>
+</p>
+
+![Pen Fight: a 3D classroom, a practice match vs a bot](docs/screenshot.jpg)
 
 The classic last-bench classroom pen fight, played by **2, 3 or 4 players for a SOL pot**
 (everyone stakes into the pot, the winner takes it all), plus an instant **practice mode vs
@@ -161,3 +172,7 @@ The delegate / commit / undelegate flow, the vault-escrow pattern and the VRF an
 integration follow the examples in
 [magicblock-labs/magicblock-engine-examples](https://github.com/magicblock-labs/magicblock-engine-examples)
 (notably `rock-paper-scissor`, `roll-dice` and `session-keys`).
+
+## License
+
+[MIT](LICENSE)
