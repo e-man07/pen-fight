@@ -1,0 +1,181 @@
+@import "tailwindcss";
+
+:root {
+  --board: #1c352b;
+  --board-deep: #142820;
+  --wood: #b87c46;
+  --wood-dark: #7a4d26;
+  --cream: #f4ead2;
+  --chalk: #f6f3e8;
+  --ink: #2447d8;
+  --red: #d6453d;
+  --marker: #f2c230;
+  --background: var(--board-deep);
+  --foreground: var(--chalk);
+}
+
+@theme inline {
+  --color-board: var(--board);
+  --color-board-deep: var(--board-deep);
+  --color-wood: var(--wood);
+  --color-wood-dark: var(--wood-dark);
+  --color-cream: var(--cream);
+  --color-chalk: var(--chalk);
+  --color-ink: var(--ink);
+  --color-pfred: var(--red);
+  --color-marker: var(--marker);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-hand: var(--font-hand);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  overscroll-behavior: none;
+}
+
+.font-hand {
+  font-family: var(--font-hand), "Comic Sans MS", cursive;
+}
+
+/* Chalky panel look */
+.panel {
+  background: color-mix(in srgb, var(--board) 88%, black);
+  border: 2px solid color-mix(in srgb, var(--wood) 70%, black);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.35);
+  border-radius: 14px;
+}
+
+.btn {
+  font-family: var(--font-hand), "Comic Sans MS", cursive;
+  font-size: 1.15rem;
+  line-height: 1;
+  padding: 0.7rem 1.15rem;
+  border-radius: 10px;
+  border: 2px solid rgba(0, 0, 0, 0.55);
+  background: var(--marker);
+  color: #2a2208;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.55);
+  transition: transform 80ms ease, box-shadow 80ms ease, filter 120ms ease;
+  cursor: pointer;
+  user-select: none;
+}
+.btn:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0.55);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--chalk);
+  border-color: rgba(246, 243, 232, 0.4);
+  box-shadow: none;
+}
+.btn-danger {
+  background: var(--red);
+  color: white;
+}
+.btn-blue {
+  background: var(--ink);
+  color: white;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: rgba(246, 243, 232, 0.1);
+  border: 1px solid rgba(246, 243, 232, 0.25);
+}
+
+/* Glass-look panel over the 3D classroom. The fill is mostly opaque on purpose and there
+   is deliberately NO backdrop-filter: blurring a continuously redrawn WebGL canvas makes
+   Chrome flash black compositor tiles on large/Retina screens. */
+.glass {
+  background: linear-gradient(160deg, rgba(22, 40, 33, 0.92), rgba(10, 20, 16, 0.9));
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 18px;
+  box-shadow:
+    0 12px 44px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+/* Inside glass panels, ghost buttons/inputs get their own dark fill for contrast. */
+.glass .btn-ghost {
+  background: rgba(0, 0, 0, 0.38);
+  border-color: rgba(246, 243, 232, 0.5);
+  color: var(--chalk);
+}
+.glass .btn-ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+}
+.glass input {
+  background: rgba(0, 0, 0, 0.4) !important;
+  color: var(--chalk);
+}
+.glass input::placeholder {
+  color: rgba(246, 243, 232, 0.55);
+}
+.btn-sm {
+  font-size: 1rem;
+  padding: 0.45rem 0.8rem;
+  border-radius: 9px;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.55);
+}
+
+/* Wallet adapter modal/button theming */
+.wallet-adapter-button {
+  font-family: var(--font-hand), "Comic Sans MS", cursive !important;
+  background: var(--marker) !important;
+  color: #2a2208 !important;
+  border: 2px solid rgba(0, 0, 0, 0.55) !important;
+  border-radius: 10px !important;
+  height: 42px !important;
+  padding: 0 1rem !important;
+  font-size: 1.05rem !important;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.55);
+}
+.wallet-adapter-button:not([disabled]):hover {
+  background: #f7cf55 !important;
+}
+.wallet-adapter-modal-wrapper {
+  background: var(--board) !important;
+}
+.wallet-adapter-modal-title,
+.wallet-adapter-modal-list .wallet-adapter-button {
+  color: var(--chalk) !important;
+}
+.wallet-adapter-modal-list .wallet-adapter-button {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: 0 !important;
+}
+
+@keyframes pop-in {
+  from { transform: translateY(8px) scale(0.96); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+.pop-in { animation: pop-in 220ms ease-out both; }
+
+@keyframes pulse-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(242, 194, 48, 0.55); }
+  50% { box-shadow: 0 0 0 10px rgba(242, 194, 48, 0); }
+}
+.pulse-ring { animation: pulse-ring 1.4s ease-in-out infinite; }
